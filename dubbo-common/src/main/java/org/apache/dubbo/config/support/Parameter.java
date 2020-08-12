@@ -81,7 +81,16 @@ public @interface Parameter {
      *      public getItem();
      *  }
      * }
-     *
+     * 如果key被指定了，当生成dubbo url的时候则使用注解的属性作为key。
+     * 默认情况，该key被用于检索配置值。
+     * {@code
+     *  class ExampleConfig {
+     *      // dubbo将会尝试从properties中查找"dubbo.example.alias_for_item=xxx"的配置项。
+     *      // 如果想使用原始的属性"dubbo.example.item=xxx"，需要设置 useKeyAsProperty=false
+     *      @Parameter(key="alias_for_item)
+     *      public getItem();
+     *  }
+     * }
      * </pre>
      */
     boolean useKeyAsProperty() default true;
