@@ -513,12 +513,21 @@ public class ApplicationConfig extends AbstractConfig {
         this.repository = repository;
     }
 
+    /**
+     * 加载环境变量，配置参数
+     */
     @Override
     public void refresh() {
         super.refresh();
         appendEnvironmentProperties();
     }
 
+    /**
+     * 追加环境变量。
+     * 通过读取实现了 InfraAdapter 接口的类，加载操作系统或者JVM等基础设施的配置属性
+     * 该配置其实是加载 META-INF/dubbo.internal下的 org.apache.dubbo.common.infra.InfraAdapter 文件中的配置类
+     * 并且读取当前应用的相关的其他参数
+     */
     private void appendEnvironmentProperties() {
         if (parameters == null) {
             parameters = new HashMap<>();
