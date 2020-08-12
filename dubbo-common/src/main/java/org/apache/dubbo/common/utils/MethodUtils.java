@@ -72,7 +72,8 @@ public interface MethodUtils {
                 && !"getClass".equals(name) && !"getObject".equals(name)
                 && Modifier.isPublic(method.getModifiers())
                 && method.getParameterTypes().length == 0
-                && ClassUtils.isPrimitive(method.getReturnType());
+                && method.getReturnType().isPrimitive()
+                && ClassUtils.isSimpleType(method.getReturnType());
     }
 
     /**
@@ -116,7 +117,6 @@ public interface MethodUtils {
     public static boolean isDeprecated(Method method) {
         return method.getAnnotation(Deprecated.class) != null;
     }
-
 
 
     /**

@@ -16,30 +16,57 @@
  */
 package org.apache.dubbo.config.support;
 
-import java.lang.annotation.Documented;
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
+import java.lang.annotation.*;
 
 /**
  * Parameter
+ * 参数注解
  */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.METHOD})
 public @interface Parameter {
 
+    /**
+     * 参数的key，默认获取注解字段的字段名，如果遇到驼峰式字段且转为"."分割的小写字符串
+     *
+     * @return
+     */
     String key() default "";
 
+    // 如果设置为true，其注解字段的value就不能为空，否则抛出异常 IllegalStateException
     boolean required() default false;
 
+    /**
+     * 通过该注解决定当前注解字段是否作为参数
+     * false-表示可以为参数，即不排除
+     * true-表示不可以为参数，即排除该字段
+     *
+     * @return
+     */
     boolean excluded() default false;
 
+    /**
+     * 转义，对于特殊字段，如果需要URL.encode()编码，则需要设置为true
+     *
+     * @return
+     */
     boolean escaped() default false;
 
+    /**
+     * 如果该字段设置为true，会在兼容早期的版本中使用，解析方式参见
+     *
+     * @return
+     * @link AbstractConfig#appendParameters 和 @link AbstractConfig#appendAttributes
+     */
     boolean attribute() default false;
 
+    /**
+     * 是否对参数追加值，如果遇到参数容器中已有该key的配置，
+     * 如果设置为true，则用逗号分割追加，否则覆盖
+     *
+     * @return
+     */
     boolean append() default false;
 
     /**
