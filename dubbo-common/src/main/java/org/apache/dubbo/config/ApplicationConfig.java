@@ -27,11 +27,24 @@ import org.apache.dubbo.config.support.Parameter;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
-import static org.apache.dubbo.common.constants.CommonConstants.*;
-import static org.apache.dubbo.common.constants.QosConstants.*;
-import static org.apache.dubbo.config.Constants.*;
+import static org.apache.dubbo.common.constants.CommonConstants.APPLICATION_KEY;
+import static org.apache.dubbo.common.constants.CommonConstants.DUMP_DIRECTORY;
+import static org.apache.dubbo.common.constants.CommonConstants.HOST_KEY;
+import static org.apache.dubbo.common.constants.CommonConstants.METADATA_KEY;
+import static org.apache.dubbo.common.constants.CommonConstants.SHUTDOWN_WAIT_KEY;
+import static org.apache.dubbo.common.constants.QosConstants.ACCEPT_FOREIGN_IP;
+import static org.apache.dubbo.common.constants.QosConstants.QOS_ENABLE;
+import static org.apache.dubbo.common.constants.QosConstants.QOS_HOST;
+import static org.apache.dubbo.common.constants.QosConstants.QOS_PORT;
+import static org.apache.dubbo.config.Constants.DEVELOPMENT_ENVIRONMENT;
+import static org.apache.dubbo.config.Constants.PRODUCTION_ENVIRONMENT;
+import static org.apache.dubbo.config.Constants.TEST_ENVIRONMENT;
 
 
 /**
