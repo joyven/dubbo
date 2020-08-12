@@ -30,33 +30,11 @@ import java.net.InetSocketAddress;
 import java.net.MalformedURLException;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 
-import static org.apache.dubbo.common.constants.CommonConstants.ANYHOST_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.ANYHOST_VALUE;
-import static org.apache.dubbo.common.constants.CommonConstants.COMMA_SPLIT_PATTERN;
-import static org.apache.dubbo.common.constants.CommonConstants.DEFAULT_KEY_PREFIX;
-import static org.apache.dubbo.common.constants.CommonConstants.GROUP_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.HOST_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.INTERFACE_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.LOCALHOST_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.METHODS_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.PASSWORD_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.PATH_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.PORT_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.PROTOCOL_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.USERNAME_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.VERSION_KEY;
+import static org.apache.dubbo.common.constants.CommonConstants.*;
 import static org.apache.dubbo.common.convert.Converter.convertIfPossible;
 import static org.apache.dubbo.common.utils.StringUtils.isBlank;
 
@@ -64,6 +42,7 @@ import static org.apache.dubbo.common.utils.StringUtils.isBlank;
  * URL - Uniform Resource Locator (Immutable, ThreadSafe)
  * <p>
  * url example:
+ * 正确的URL格式如下几种：
  * <ul>
  * <li>http://www.facebook.com/friends?param1=value1&amp;param2=value2
  * <li>http://username:password@10.20.130.230:8080/list?version=1.0.0
@@ -72,6 +51,7 @@ import static org.apache.dubbo.common.utils.StringUtils.isBlank;
  * </ul>
  * <p>
  * Some strange example below:
+ * 下面一些奇怪的配置：
  * <ul>
  * <li>192.168.1.3:20880<br>
  * for this case, url protocol = null, url host = 192.168.1.3, port = 20880, url path = null
@@ -88,6 +68,11 @@ import static org.apache.dubbo.common.utils.StringUtils.isBlank;
  * <li>home/user1/router.js?type=script <br>
  * for this case, url protocol = null, url host = home, url path = user1/router.js
  * </ul>
+ * <p>
+ * dubbo中所有的配置最终转换为 Dubbo URL 表示，并由服务提供方生成，经注册中心传递给消费方，
+ * 各属性的对应的URL的参数，可以看具体的配置class， 在dubbo-common的config目录下面。
+ * <p>
+ * 格式为 protocol://username:password@host:port/path?key=value&key=value ，通过 URL#buildString(...) 方法生成。
  *
  * @see java.net.URL
  * @see java.net.URI
@@ -111,6 +96,9 @@ class URL implements Serializable {
 
     private final String path;
 
+    /**
+     * 参数集合，通过AbstrctConfig#appendParameters(parameters, config, prefix)方法生成
+     */
     private final Map<String, String> parameters;
 
     private final Map<String, Map<String, String>> methodParameters;
