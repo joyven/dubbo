@@ -31,28 +31,8 @@ import org.apache.dubbo.common.threadpool.manager.ExecutorRepository;
 import org.apache.dubbo.common.utils.ArrayUtils;
 import org.apache.dubbo.common.utils.CollectionUtils;
 import org.apache.dubbo.common.utils.StringUtils;
-import org.apache.dubbo.config.ApplicationConfig;
-import org.apache.dubbo.config.ConfigCenterConfig;
-import org.apache.dubbo.config.ConsumerConfig;
-import org.apache.dubbo.config.DubboShutdownHook;
-import org.apache.dubbo.config.MetadataReportConfig;
-import org.apache.dubbo.config.MetricsConfig;
-import org.apache.dubbo.config.ModuleConfig;
-import org.apache.dubbo.config.MonitorConfig;
-import org.apache.dubbo.config.ProtocolConfig;
-import org.apache.dubbo.config.ProviderConfig;
-import org.apache.dubbo.config.ReferenceConfig;
-import org.apache.dubbo.config.RegistryConfig;
-import org.apache.dubbo.config.ServiceConfig;
-import org.apache.dubbo.config.ServiceConfigBase;
-import org.apache.dubbo.config.SslConfig;
-import org.apache.dubbo.config.bootstrap.builders.ApplicationBuilder;
-import org.apache.dubbo.config.bootstrap.builders.ConsumerBuilder;
-import org.apache.dubbo.config.bootstrap.builders.ProtocolBuilder;
-import org.apache.dubbo.config.bootstrap.builders.ProviderBuilder;
-import org.apache.dubbo.config.bootstrap.builders.ReferenceBuilder;
-import org.apache.dubbo.config.bootstrap.builders.RegistryBuilder;
-import org.apache.dubbo.config.bootstrap.builders.ServiceBuilder;
+import org.apache.dubbo.config.*;
+import org.apache.dubbo.config.bootstrap.builders.*;
 import org.apache.dubbo.config.context.ConfigManager;
 import org.apache.dubbo.config.utils.ConfigValidationUtils;
 import org.apache.dubbo.config.utils.ReferenceConfigCache;
@@ -64,22 +44,12 @@ import org.apache.dubbo.metadata.MetadataServiceExporter;
 import org.apache.dubbo.metadata.WritableMetadataService;
 import org.apache.dubbo.metadata.report.MetadataReportFactory;
 import org.apache.dubbo.metadata.report.MetadataReportInstance;
-import org.apache.dubbo.registry.client.DefaultServiceInstance;
-import org.apache.dubbo.registry.client.ServiceDiscovery;
-import org.apache.dubbo.registry.client.ServiceDiscoveryRegistry;
-import org.apache.dubbo.registry.client.ServiceInstance;
-import org.apache.dubbo.registry.client.ServiceInstanceCustomizer;
+import org.apache.dubbo.registry.client.*;
 import org.apache.dubbo.registry.support.AbstractRegistryFactory;
 import org.apache.dubbo.rpc.model.ApplicationModel;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
-import java.util.SortedSet;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
@@ -96,9 +66,7 @@ import static java.util.Arrays.asList;
 import static java.util.concurrent.Executors.newSingleThreadExecutor;
 import static org.apache.dubbo.common.config.ConfigurationUtils.parseProperties;
 import static org.apache.dubbo.common.config.configcenter.DynamicConfiguration.getDynamicConfiguration;
-import static org.apache.dubbo.common.constants.CommonConstants.DEFAULT_METADATA_STORAGE_TYPE;
-import static org.apache.dubbo.common.constants.CommonConstants.REGISTRY_SPLIT_PATTERN;
-import static org.apache.dubbo.common.constants.CommonConstants.REMOTE_METADATA_STORAGE_TYPE;
+import static org.apache.dubbo.common.constants.CommonConstants.*;
 import static org.apache.dubbo.common.extension.ExtensionLoader.getExtensionLoader;
 import static org.apache.dubbo.common.function.ThrowableAction.execute;
 import static org.apache.dubbo.common.utils.StringUtils.isEmpty;
@@ -182,6 +150,7 @@ public class DubboBootstrap extends GenericEventListener {
 
     /**
      * See {@link ApplicationModel} and {@link ExtensionLoader} for why DubboBootstrap is designed to be singleton.
+     * 单例
      */
     public static DubboBootstrap getInstance() {
         if (instance == null) {
@@ -224,6 +193,7 @@ public class DubboBootstrap extends GenericEventListener {
         return type;
     }
 
+    // ============= 设置metadataReport的配置==============
     public DubboBootstrap metadataReport(MetadataReportConfig metadataReportConfig) {
         configManager.addMetadataReport(metadataReportConfig);
         return this;
@@ -238,6 +208,10 @@ public class DubboBootstrap extends GenericEventListener {
         return this;
     }
 
+    // ================== 设置应用相关配置信息=============
+    // ======= 1.可以通过应用name设置======================
+    // ======= 2.可以通过应用name和consumer信息设置==========
+    // ======= 3.可以通过applicationConfig对象设置=========
     // {@link ApplicationConfig} correlative methods
 
     /**
@@ -276,6 +250,7 @@ public class DubboBootstrap extends GenericEventListener {
         return this;
     }
 
+    // ================= 设置注册中心的信息 ==========
 
     // {@link RegistryConfig} correlative methods
 
@@ -328,6 +303,7 @@ public class DubboBootstrap extends GenericEventListener {
     }
 
 
+    // ================ 设置协议相关信息 =================
     // {@link ProtocolConfig} correlative methods
     public DubboBootstrap protocol(Consumer<ProtocolBuilder> consumerBuilder) {
         return protocol(DEFAULT_PROTOCOL_ID, consumerBuilder);
@@ -351,6 +327,7 @@ public class DubboBootstrap extends GenericEventListener {
         return this;
     }
 
+    // =============== 服务相关设置入口 ==========================
     // {@link ServiceConfig} correlative methods
     public <S> DubboBootstrap service(Consumer<ServiceBuilder<S>> consumerBuilder) {
         return service(DEFAULT_SERVICE_ID, consumerBuilder);
@@ -516,21 +493,29 @@ public class DubboBootstrap extends GenericEventListener {
             return;
         }
 
+        // 初始化框架
         ApplicationModel.initFrameworkExts();
 
+        // 开启注册中心
         startConfigCenter();
 
+        // 加载远程配置
         loadRemoteConfigs();
 
+        // 检测全局配置
         checkGlobalConfigs();
 
         // @since 2.7.8
+        // 开启元数据存储中心
         startMetadataCenter();
 
+        // 初始化元数据服务
         initMetadataService();
 
+        // 初始化暴露元数据服务
         initMetadataServiceExports();
 
+        // 初始化事件监听
         initEventListener();
 
         if (logger.isInfoEnabled()) {
@@ -893,6 +878,7 @@ public class DubboBootstrap extends GenericEventListener {
     public DubboBootstrap start() {
         if (started.compareAndSet(false, true)) {
             ready.set(false);
+            // 初始化
             initialize();
             if (logger.isInfoEnabled()) {
                 logger.info(NAME + " is starting...");
