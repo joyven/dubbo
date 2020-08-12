@@ -22,11 +22,7 @@ import org.apache.dubbo.common.config.Environment;
 import org.apache.dubbo.common.constants.CommonConstants;
 import org.apache.dubbo.common.logger.Logger;
 import org.apache.dubbo.common.logger.LoggerFactory;
-import org.apache.dubbo.common.utils.ClassUtils;
-import org.apache.dubbo.common.utils.CollectionUtils;
-import org.apache.dubbo.common.utils.MethodUtils;
-import org.apache.dubbo.common.utils.ReflectUtils;
-import org.apache.dubbo.common.utils.StringUtils;
+import org.apache.dubbo.common.utils.*;
 import org.apache.dubbo.config.context.ConfigManager;
 import org.apache.dubbo.config.support.Parameter;
 import org.apache.dubbo.rpc.model.ApplicationModel;
@@ -36,11 +32,7 @@ import javax.annotation.PostConstruct;
 import java.io.Serializable;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
@@ -48,6 +40,8 @@ import static org.apache.dubbo.common.utils.ReflectUtils.findMethodByMethodSigna
 
 /**
  * Utility methods and public methods for parsing configuration
+ * 除了ArgumentConfig之外其他所有配置类都继承此类，
+ * 该类放置解析配置的公共方法和公开方法（包括解析和校验工具）
  *
  * @export
  */
@@ -58,11 +52,14 @@ public abstract class AbstractConfig implements Serializable {
 
     /**
      * The legacy properties container
+     * 遗留配置属性容器，存放新老配置兼容的问题。比如老版本中`dubbo.protocol.name`在新版本中应该为`dubbo.service.protocol`
+     * key为老版本的配置属性，value为新版本配置属性
      */
     private static final Map<String, String> LEGACY_PROPERTIES = new HashMap<String, String>();
 
     /**
      * The suffix container
+     * 后缀容器
      */
     private static final String[] SUFFIXES = new String[]{"Config", "Bean", "ConfigBase"};
 
@@ -79,6 +76,9 @@ public abstract class AbstractConfig implements Serializable {
 
     /**
      * The config id
+     * 配置ID，配置对象的编号。适用于除了API之外的三种配置方式（XML配置、注解配置、属性配置），标记一个配置对象，可用于对象之间的引用。
+     * 在xml中配置为如此，<dubbo:reference id="privilegeService" interface="cn.xxx.service.PrivilegeService" registry="normal" xxx="xxx"/>
+     * 那么 id 就是 privilegeService
      */
     protected String id;
     protected String prefix;
@@ -96,6 +96,14 @@ public abstract class AbstractConfig implements Serializable {
         return value;
     }
 
+    /**
+     * 获取标签名，如果类名是以 Config\Bean\ConfigBean结尾的，则截取掉后缀。
+     * 然后把类型中驼峰式写法转为短线"-"连接的小写字符串。
+     * 比如`TestDubboConfig.class`，得到的`tag`为`test-dubbo`
+     *
+     * @param cls 传入一个class
+     * @return
+     */
     public static String getTagName(Class<?> cls) {
         String tag = cls.getSimpleName();
         for (String suffix : SUFFIXES) {
@@ -111,24 +119,41 @@ public abstract class AbstractConfig implements Serializable {
         appendParameters(parameters, config, null);
     }
 
+    /**
+     * 解析参数，并追加到参数容器中,
+     * parameters 集合最终会用到 URL.parameters 中，这也就是为啥会出现有的字段需要转义
+     *
+     * @param parameters 参数容器
+     * @param config     配置对象
+     * @param prefix     参数key的前缀，如果不为空，则以圆点"."分割
+     */
     @SuppressWarnings("unchecked")
     public static void appendParameters(Map<String, String> parameters, Object config, String prefix) {
         if (config == null) {
             return;
         }
+        // 配置类的参数必须是getXXX方法或者isXXX方法
         Method[] methods = config.getClass().getMethods();
         for (Method method : methods) {
             try {
                 String name = method.getName();
+
+                // 返回类型是基本类型，
+                // 且是public的get或者is开头的，排除了getClass和getObject以及get()和is()方法
+                // 并且参数长度为0，即无参
                 if (MethodUtils.isGetter(method)) {
                     Parameter parameter = method.getAnnotation(Parameter.class);
                     if (method.getReturnType() == Object.class || parameter != null && parameter.excluded()) {
+                        // 在追加参数时，排除方法返回类型是Object，或者不是 Parameter.class 注解
+                        // 或者虽然是Parameter.class注解，但是excluded属性为true
                         continue;
                     }
                     String key;
                     if (parameter != null && parameter.key().length() > 0) {
                         key = parameter.key();
                     } else {
+                        // 如果没有配置key，则想字段驼峰式用"."连接替换
+                        // isValidTest 则转为 valid.test
                         key = calculatePropertyFromGetter(name);
                     }
                     Object value = method.invoke(config);
@@ -148,9 +173,13 @@ public abstract class AbstractConfig implements Serializable {
                         }
                         parameters.put(key, str);
                     } else if (parameter != null && parameter.required()) {
+                        // 如果required设置为true，但是value为空，则抛出异常
                         throw new IllegalStateException(config.getClass().getSimpleName() + "." + key + " == null");
                     }
                 } else if (isParametersGetter(method)) {
+                    // 如果是 public Map getParameters(){} 方法，则经过转换之后追加到参数中
+                    // 为了兼容老版本，map中的参数的key可以是"-"连接的字符串
+                    // 当然新版中建议还是使用"."做分割分，比如 registry.type
                     Map<String, String> map = (Map<String, String>) method.invoke(config, new Object[0]);
                     parameters.putAll(convert(map, prefix));
                 }
@@ -165,6 +194,14 @@ public abstract class AbstractConfig implements Serializable {
         appendAttributes(parameters, config, null);
     }
 
+    /**
+     * 该方法已经废弃了。应该是用 appendParameters 方法替换掉了。
+     * 实现细节几乎同`appendParameters` 一样，只是解析是是注解中使用了 `attribute` 为`true`的字段
+     *
+     * @param parameters
+     * @param config
+     * @param prefix
+     */
     @Deprecated
     protected static void appendAttributes(Map<String, Object> parameters, Object config, String prefix) {
         if (config == null) {
@@ -269,6 +306,12 @@ public abstract class AbstractConfig implements Serializable {
         return propertyName;
     }
 
+    /**
+     * 获取属性名，并且将驼峰式的转写"."分割的字符串
+     *
+     * @param name
+     * @return
+     */
     private static String calculatePropertyFromGetter(String name) {
         int i = name.startsWith("get") ? 3 : 2;
         return StringUtils.camelToSplitName(name.substring(i, i + 1).toLowerCase() + name.substring(i + 1), ".");
@@ -319,6 +362,11 @@ public abstract class AbstractConfig implements Serializable {
     }
 
     /**
+     * 将map中包含-的key转换为.的key。
+     * 返回：KV格式为：
+     * ---- 如果prefix不为空，prefix.entry.key entry.value
+     * ---- 如果prefix未空，entry.key entry.value
+     *
      * @param parameters the raw parameters
      * @param prefix     the prefix
      * @return the parameters whose raw key will replace "-" to "."
