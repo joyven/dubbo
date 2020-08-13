@@ -173,6 +173,9 @@ public class ExtensionLoader<T> {
     private ExtensionLoader(Class<?> type) {
         // type本身就是通过@SPI注解的接口
         this.type = type;
+        // 设置 objectFactory
+        // 如果 type 是 ExtensionFactory，则为 null
+        // 如果是其他接口，则为 AdaptiveExtensionFactory
         objectFactory = (type == ExtensionFactory.class ? null : ExtensionLoader.getExtensionLoader(ExtensionFactory.class).getAdaptiveExtension());
     }
 
@@ -779,30 +782,40 @@ public class ExtensionLoader<T> {
      */
     private T injectExtension(T instance) {
 
+        // objectFactory 变量的类型为 AdaptiveExtensionFactory,具体描述可以参考
+        // @see AdaptiveExtensionFactory
         if (objectFactory == null) {
             return instance;
         }
 
         try {
+            // 遍历目标类的所有方法
             for (Method method : instance.getClass().getMethods()) {
+                // 检测方式是否以 set 开头，且仅有一个参数，且方法访问级别为 public
                 if (!isSetter(method)) {
                     continue;
                 }
                 /**
                  * Check {@link DisableInject} to see if we need auto injection for this property
+                 * 检出方式是否 @DisableInject 注解
                  */
                 if (method.getAnnotation(DisableInject.class) != null) {
                     continue;
                 }
+                // 获取 setter 方法的参数类型
                 Class<?> pt = method.getParameterTypes()[0];
+                // 检测参数类型是否为基本数据类型
                 if (ReflectUtils.isPrimitives(pt)) {
                     continue;
                 }
 
                 try {
+                    // 获取属性名，比如 setApplication 方法对应的属性名为 application
                     String property = getSetterProperty(method);
+                    // 从 objectFactory 中获取依赖对象
                     Object object = objectFactory.getExtension(pt, property);
                     if (object != null) {
+                        // 通过反射调用 setter 方法设置依赖
                         method.invoke(instance, object);
                     }
                 } catch (Exception e) {
@@ -951,7 +964,7 @@ public class ExtensionLoader<T> {
      */
     private void loadDirectory(Map<String, Class<?>> extensionClasses, String dir, String type,
                                boolean extensionLoaderClassLoaderFirst, boolean overridden, String... excludedPackages) {
-        // 加载目录为加载策略配置的目录+接口的全类名
+        // fileName = 文件夹路径 + type 全限定名
         String fileName = dir + type;
         try {
             Enumeration<java.net.URL> urls = null;
@@ -966,6 +979,7 @@ public class ExtensionLoader<T> {
             }
 
             if (urls == null || !urls.hasMoreElements()) {
+                // 根据文件名加载所有的同名文件
                 if (classLoader != null) {
                     urls = classLoader.getResources(fileName);
                 } else {
@@ -976,6 +990,7 @@ public class ExtensionLoader<T> {
             if (urls != null) {
                 while (urls.hasMoreElements()) {
                     java.net.URL resourceURL = urls.nextElement();
+                    // 加载资源
                     loadResource(extensionClasses, classLoader, resourceURL, overridden, excludedPackages);
                 }
             }
@@ -999,9 +1014,12 @@ public class ExtensionLoader<T> {
         try {
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(resourceURL.openStream(), StandardCharsets.UTF_8))) {
                 String line;
+                // 按行读取配置内容
                 while ((line = reader.readLine()) != null) {
+                    // 定位 # 字符
                     final int ci = line.indexOf('#');
                     if (ci >= 0) {
+                        // 截取 # 之前的字符串， # 之后的内容为注释，需要忽略
                         line = line.substring(0, ci);
                     }
                     line = line.trim();
@@ -1010,10 +1028,12 @@ public class ExtensionLoader<T> {
                             String name = null;
                             int i = line.indexOf('=');
                             if (i > 0) {
+                                // 以等号 = 为界，截取键值
                                 name = line.substring(0, i).trim();
                                 line = line.substring(i + 1).trim();
                             }
                             if (line.length() > 0 && !isExcluded(line, excludedPackages)) {
+                                // 加载类，并通过 loadClass 方法对类进行缓存
                                 loadClass(extensionClasses, resourceURL, Class.forName(line, true, classLoader), name, overridden);
                             }
                         } catch (Throwable t) {
@@ -1044,7 +1064,7 @@ public class ExtensionLoader<T> {
      * @param extensionClasses 扩展类容器
      * @param resourceURL      资源URL
      * @param clazz            通过反射实例化的类
-     * @param name             类对应的key名称，name可以是逗号分割的字符串，如果这样，则实例化类就会和多个key关联
+     * @param name             类对应的key名称
      * @param overridden       存在相同的key时是否覆盖
      * @throws NoSuchMethodException
      */
@@ -1055,24 +1075,36 @@ public class ExtensionLoader<T> {
                     type + ", class line: " + clazz.getName() + "), class "
                     + clazz.getName() + " is not subtype of interface.");
         }
+        // 检测目标类上是否有 Adaptive 注解
         if (clazz.isAnnotationPresent(Adaptive.class)) {
+            // 设置 cachedAdaptiveClass 缓存
             cacheAdaptiveClass(clazz, overridden);
+            // 检测 clazz 是否是Wrapper 容器
         } else if (isWrapperClass(clazz)) {
+            // 存储 clazz 到 cachedWrapperClasses 缓存中
             cacheWrapperClass(clazz);
+            // 程序进入此分支，表明 clazz 是一个普通的拓展类
         } else {
+            // 检测 clazz 是否有默认的构造方法，如果没有，则抛出异常
             clazz.getConstructor();
             if (StringUtils.isEmpty(name)) {
+                // 如果name为空，则尝试从 Extension 注解中获取 name，或使用小写的类名作为 name
                 name = findAnnotationName(clazz);
                 if (name.length() == 0) {
                     throw new IllegalStateException("No such extension name for the class " + clazz.getName() + " in the config " + resourceURL);
                 }
             }
 
+            // 用逗号作为分隔符切分 name
             String[] names = NAME_SEPARATOR.split(name);
             if (ArrayUtils.isNotEmpty(names)) {
+                // 如果类上有 Activate 注解，则使用 names 数组的第一个元素作为键，
+                // 存储 name 到 Activate 注解对象的映射关系
                 cacheActivateClass(clazz, names[0]);
                 for (String n : names) {
+                    // 存储 Class 到名称的映射关系
                     cacheName(clazz, n);
+                    // 存储名称到 Class 的映射关系
                     saveInExtensionClass(extensionClasses, clazz, n, overridden);
                 }
             }
@@ -1081,6 +1113,7 @@ public class ExtensionLoader<T> {
 
     /**
      * cache name
+     * 存储 Class 到名称的映射关系
      */
     private void cacheName(Class<?> clazz, String name) {
         if (!cachedNames.containsKey(clazz)) {
@@ -1090,10 +1123,12 @@ public class ExtensionLoader<T> {
 
     /**
      * put clazz in extensionClasses
+     * 存储名称到 Class 的映射关系
      */
     private void saveInExtensionClass(Map<String, Class<?>> extensionClasses, Class<?> clazz, String name, boolean overridden) {
         Class<?> c = extensionClasses.get(name);
         if (c == null || overridden) {
+            // 存储名称到 Class 的映射关系
             extensionClasses.put(name, clazz);
         } else if (c != clazz) {
             String duplicateMsg = "Duplicate extension " + type.getName() + " name " + name + " on " + c.getName() + " and " + clazz.getName();
@@ -1106,6 +1141,8 @@ public class ExtensionLoader<T> {
      * cache Activate class which is annotated with <code>Activate</code>
      * <p>
      * for compatibility, also cache class with old alibaba Activate annotation
+     * 如果类上有 Activate 注解，则使用 names 数组的第一个元素作为键，
+     * 存储 name 到 Activate 注解对象的映射关系
      */
     private void cacheActivateClass(Class<?> clazz, String name) {
         Activate activate = clazz.getAnnotation(Activate.class);
@@ -1159,6 +1196,12 @@ public class ExtensionLoader<T> {
         }
     }
 
+    /**
+     * 尝试从 Extension 注解中获取 name，或使用小写的类名作为 name
+     *
+     * @param clazz
+     * @return
+     */
     @SuppressWarnings("deprecation")
     private String findAnnotationName(Class<?> clazz) {
         org.apache.dubbo.common.Extension extension = clazz.getAnnotation(org.apache.dubbo.common.Extension.class);
